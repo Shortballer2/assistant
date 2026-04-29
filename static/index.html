@@ -12,6 +12,19 @@
       <p class="subtitle">Autonomous mode runs even when you are not actively chatting.</p>
 
       <section class="card">
+        <h2>Email Connections</h2>
+        <div class="row">
+          <select id="provider">
+            <option value="gmail">Gmail</option>
+            <option value="microsoft">Microsoft</option>
+          </select>
+          <input id="email" type="email" placeholder="you@example.com" />
+          <button id="connect-email">Connect</button>
+        </div>
+        <pre id="connections" class="panel">No accounts connected.</pre>
+      </section>
+
+      <section class="card">
         <h2>Autopilot</h2>
         <div class="row">
           <input id="interval" type="number" min="30" value="300" />
