@@ -6,7 +6,7 @@ from typing import Literal
 from uuid import uuid4
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
@@ -26,6 +26,48 @@ def utc_now() -> datetime:
 
 class ChatRequest(BaseModel):
     message: str
+
+
+
+
+class UserProfile(BaseModel):
+    full_name: str = ""
+    email: str = ""
+    phone: str = ""
+    location: str = ""
+    target_roles: list[str] = []
+    skills: list[str] = []
+    experience_summary: str = ""
+    retail_business_name: str = ""
+    retail_business_summary: str = ""
+
+
+class ResumeOptimizationRequest(BaseModel):
+    job_title: str
+    company: str = ""
+    job_description: str
+
+
+class CoverLetterRequest(BaseModel):
+    job_title: str
+    company: str
+    job_description: str
+    tone: Literal["professional", "warm", "confident"] = "professional"
+
+
+class JobSearchRequest(BaseModel):
+    job_description: str
+    max_matches: int = Field(default=5, ge=1, le=10)
+
+
+class RetailTask(BaseModel):
+    id: str
+    area: Literal["inventory", "marketing", "customer_service", "finance", "operations"]
+    title: str
+    detail: str = ""
+    due_at: datetime | None = None
+    status: Literal["open", "in_progress", "done"] = "open"
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class LearningFeedback(BaseModel):
@@ -91,6 +133,9 @@ STATE: dict[str, object] = {
     "threads": [],
     "email_connections": [],
     "autopilot": {"enabled": False, "interval_seconds": 300, "last_run_at": None, "last_brief": None},
+    "profile": UserProfile(),
+    "resume": {"filename": None, "content": "", "uploaded_at": None},
+    "retail_tasks": [],
     "learning": {
         "feedback_events": 0,
         "avg_feedback_score": 0.0,
@@ -115,8 +160,11 @@ def build_smart_context_summary() -> str:
     threads = STATE["threads"]
     email_connections = STATE["email_connections"]
     learning = STATE["learning"]
+    profile = STATE["profile"]
+    resume = STATE["resume"]
+    retail_tasks = STATE["retail_tasks"]
     assert isinstance(items, list) and isinstance(jobs, list) and isinstance(threads, list) and isinstance(email_connections, list)
-    assert isinstance(learning, dict)
+    assert isinstance(learning, dict) and isinstance(profile, UserProfile) and isinstance(resume, dict) and isinstance(retail_tasks, list)
 
     connected_providers = sorted({c.provider for c in email_connections if c.status == "connected"})
     if connected_providers:
@@ -142,13 +190,21 @@ def build_smart_context_summary() -> str:
     preferred_style = max(response_style_votes, key=response_style_votes.get) if response_style_votes else "balanced"
     confidence_mode = "proactive" if confidence_bias >= 0 else "cautious"
 
+    user_identity = profile.full_name or "the user"
+    target_roles = ", ".join(profile.target_roles[:5]) or "not specified"
+    retail_name = profile.retail_business_name or "retail business"
+    resume_ready = "available" if resume.get("content") else "not uploaded"
+
     return (
         f"You are a proactive personal assistant. {inbox_note} "
         f"Current counts -> open action items: {len(items)}, active job applications: {len(jobs)}, tracked threads: {len(threads)}. "
         f"Preferred user topics based on feedback: {preferred_topics}. Topics to avoid over-indexing: {avoid_topics}. "
         f"Active conversation topics: {active_topics}. Preferred response style: {preferred_style}. Confidence mode: {confidence_mode}. "
         "When asked for planning, prioritize near-term deadlines, then follow-up risk, then effort optimization. "
-        "Mirror the preferred style, reason in steps, and explicitly call out assumptions when uncertain."
+        "Mirror the preferred style, reason in steps, and explicitly call out assumptions when uncertain. "
+        f"Support career workflows: learn user background, optimize resume for specific job posts, write tailored cover letters, and suggest best-fit jobs. "
+        f"Support business workflows for {retail_name}: inventory, marketing, operations, customer service, and finance triage. "
+        f"User: {user_identity}; target roles: {target_roles}; resume status: {resume_ready}; retail task count: {len(retail_tasks)}."
     )
 
 
@@ -218,14 +274,116 @@ def learning_profile() -> dict:
     return learning
 
 
-@app.post("/api/chat")
-def chat(payload: ChatRequest) -> dict:
+@app.get("/api/profile")
+def get_profile() -> UserProfile:
+    profile = STATE["profile"]
+    assert isinstance(profile, UserProfile)
+    return profile
+
+
+@app.post("/api/profile")
+def upsert_profile(payload: UserProfile) -> UserProfile:
+    STATE["profile"] = payload
+    return payload
+
+
+@app.post("/api/resume/upload")
+async def upload_resume(file: UploadFile = File(...)) -> dict:
+    raw = await file.read()
+    text = raw.decode("utf-8", errors="ignore")
+    STATE["resume"] = {"filename": file.filename, "content": text[:120000], "uploaded_at": utc_now().isoformat()}
+    return {"ok": True, "filename": file.filename, "characters": len(text)}
+
+
+@app.get("/api/resume")
+def get_resume() -> dict:
+    resume = STATE["resume"]
+    assert isinstance(resume, dict)
+    return resume
+
+
+def require_client() -> OpenAI:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured.")
+    return OpenAI(api_key=api_key)
 
+
+@app.post("/api/resume/optimize")
+def optimize_resume(payload: ResumeOptimizationRequest) -> dict:
+    resume = STATE["resume"]
+    profile = STATE["profile"]
+    assert isinstance(resume, dict) and isinstance(profile, UserProfile)
+    resume_text = str(resume.get("content") or profile.experience_summary)
+    if not resume_text.strip():
+        raise HTTPException(status_code=400, detail="Upload a resume or set profile experience_summary first.")
+
+    client = require_client()
+    prompt = (
+        "Rewrite and optimize this resume for the target role. Return JSON with keys summary, bullet_updates, keyword_gaps.\n"
+        f"Role: {payload.job_title}\nCompany: {payload.company}\nJob description:\n{payload.job_description}\n\n"
+        f"Current resume:\n{resume_text}"
+    )
+    response = client.responses.create(model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"), input=prompt)
+    return {"optimized": response.output_text}
+
+
+@app.post("/api/cover-letter")
+def generate_cover_letter(payload: CoverLetterRequest) -> dict:
+    resume = STATE["resume"]
+    profile = STATE["profile"]
+    assert isinstance(resume, dict) and isinstance(profile, UserProfile)
+    client = require_client()
+    source = str(resume.get("content") or profile.experience_summary)
+    prompt = (
+        f"Write a one-page {payload.tone} cover letter for {payload.company} / {payload.job_title}. "
+        "Use concrete achievements and keep it concise.\n"
+        f"Job description:\n{payload.job_description}\n\nCandidate background:\n{source}"
+    )
+    response = client.responses.create(model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"), input=prompt)
+    return {"cover_letter": response.output_text}
+
+
+@app.post("/api/jobs/match")
+def match_jobs(payload: JobSearchRequest) -> dict:
+    profile = STATE["profile"]
+    resume = STATE["resume"]
+    assert isinstance(profile, UserProfile) and isinstance(resume, dict)
+    baseline = resume.get("content") or profile.experience_summary
+    if not baseline:
+        raise HTTPException(status_code=400, detail="Need resume or profile experience to compute match.")
+
+    keywords = {w.lower() for w in extract_topics(str(baseline))}
+    jd_tokens = extract_topics(payload.job_description)
+    overlap = [t for t in jd_tokens if t.lower() in keywords]
+    score = round(min(100, (len(overlap) / max(len(jd_tokens), 1)) * 100), 1)
+    suggestions = [
+        f"Prioritize roles mentioning: {', '.join(overlap[:8]) or 'core strengths from your resume'}",
+        "Filter for roles aligned to your target role list and seniority.",
+        "Use cover letter + optimized bullet points before applying.",
+    ]
+    return {"match_score": score, "matched_keywords": overlap[: payload.max_matches], "suggestions": suggestions}
+
+
+@app.post("/api/retail/tasks")
+def create_retail_task(payload: RetailTask) -> RetailTask:
+    tasks = STATE["retail_tasks"]
+    assert isinstance(tasks, list)
+    tasks.append(payload)
+    return payload
+
+
+@app.get("/api/retail/tasks")
+def list_retail_tasks() -> list[RetailTask]:
+    tasks = STATE["retail_tasks"]
+    assert isinstance(tasks, list)
+    return tasks
+
+
+@app.post("/api/chat")
+def chat(payload: ChatRequest) -> dict:
     update_interaction_learning(payload.message)
-    client = OpenAI(api_key=api_key)
+    client = require_client()
     try:
         response = client.responses.create(
             model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
