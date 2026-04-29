@@ -31,6 +31,7 @@ The backend now includes foundational modules to match the plan:
 - `POST /api/threads` + `GET /api/followups` – follow-up intelligence with draft nudges.
 - `POST /api/jobs` + `GET /api/jobs` – lightweight job application tracker.
 - `GET /api/brief` – generated morning brief with top outcomes, focus blocks, and due follow-ups.
+- `POST /api/learning/feedback` + `GET /api/learning/profile` – adaptive learning loop that tracks high-signal topics from user feedback and tunes assistant behavior.
 
 These are intentionally in-memory MVP endpoints so you can quickly validate workflow before adding persistent storage and external OAuth integrations.
 

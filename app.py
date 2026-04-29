@@ -28,6 +28,11 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class LearningFeedback(BaseModel):
+    message: str = Field(min_length=1)
+    score: Literal[1, 2, 3, 4, 5]
+
+
 class ActionItem(BaseModel):
     id: str
     source: Literal["email", "text", "calendar", "job"]
@@ -86,6 +91,12 @@ STATE: dict[str, object] = {
     "threads": [],
     "email_connections": [],
     "autopilot": {"enabled": False, "interval_seconds": 300, "last_run_at": None, "last_brief": None},
+    "learning": {
+        "feedback_events": 0,
+        "avg_feedback_score": 0.0,
+        "high_signal_topics": {},
+        "low_signal_topics": {},
+    },
 }
 AUTOPILOT_TASK: asyncio.Task | None = None
 
@@ -100,7 +111,9 @@ def build_smart_context_summary() -> str:
     jobs = STATE["jobs"]
     threads = STATE["threads"]
     email_connections = STATE["email_connections"]
+    learning = STATE["learning"]
     assert isinstance(items, list) and isinstance(jobs, list) and isinstance(threads, list) and isinstance(email_connections, list)
+    assert isinstance(learning, dict)
 
     connected_providers = sorted({c.provider for c in email_connections if c.status == "connected"})
     if connected_providers:
@@ -109,11 +122,55 @@ def build_smart_context_summary() -> str:
     else:
         inbox_note = "No email account connected. Suggest connecting Gmail or Microsoft for inbox-aware planning."
 
+    high_signal_topics = learning.get("high_signal_topics", {})
+    low_signal_topics = learning.get("low_signal_topics", {})
+    assert isinstance(high_signal_topics, dict) and isinstance(low_signal_topics, dict)
+    preferred_topics = ", ".join(sorted(high_signal_topics, key=high_signal_topics.get, reverse=True)[:5]) or "none yet"
+    avoid_topics = ", ".join(sorted(low_signal_topics, key=low_signal_topics.get, reverse=True)[:5]) or "none yet"
+
     return (
         f"You are a proactive personal assistant. {inbox_note} "
         f"Current counts -> open action items: {len(items)}, active job applications: {len(jobs)}, tracked threads: {len(threads)}. "
+        f"Preferred user topics based on feedback: {preferred_topics}. Topics to avoid over-indexing: {avoid_topics}. "
         "When asked for planning, prioritize near-term deadlines, then follow-up risk, then effort optimization."
     )
+
+
+def extract_topics(message: str) -> list[str]:
+    words = [word.strip(".,!?;:()[]{}\"'").lower() for word in message.split()]
+    filtered = [w for w in words if len(w) >= 4 and w.isalpha()]
+    return list(dict.fromkeys(filtered[:8]))
+
+
+@app.post("/api/learning/feedback")
+def record_learning_feedback(payload: LearningFeedback) -> dict:
+    learning = STATE["learning"]
+    assert isinstance(learning, dict)
+    total_events = int(learning.get("feedback_events", 0))
+    avg_score = float(learning.get("avg_feedback_score", 0.0))
+    total_score = avg_score * total_events + payload.score
+    total_events += 1
+    learning["feedback_events"] = total_events
+    learning["avg_feedback_score"] = round(total_score / total_events, 3)
+
+    high_signal_topics = learning.setdefault("high_signal_topics", {})
+    low_signal_topics = learning.setdefault("low_signal_topics", {})
+    assert isinstance(high_signal_topics, dict) and isinstance(low_signal_topics, dict)
+
+    for topic in extract_topics(payload.message):
+        if payload.score >= 4:
+            high_signal_topics[topic] = int(high_signal_topics.get(topic, 0)) + 1
+        elif payload.score <= 2:
+            low_signal_topics[topic] = int(low_signal_topics.get(topic, 0)) + 1
+
+    return {"ok": True, "learning": learning}
+
+
+@app.get("/api/learning/profile")
+def learning_profile() -> dict:
+    learning = STATE["learning"]
+    assert isinstance(learning, dict)
+    return learning
 
 
 @app.post("/api/chat")
@@ -238,6 +295,7 @@ def assistant_health() -> dict:
             "follow_up_intelligence",
             "job_tracker",
             "personalization",
+            "adaptive_learning",
             "autopilot",
             "email_connectors",
         ],
