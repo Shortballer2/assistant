@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Assistant</title>
+    <link rel="stylesheet" href="/static/style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>My Assistant</h1>
+      <p class="subtitle">Works on iPhone and computer browser.</p>
+
+      <section id="chat" class="chat"></section>
+
+      <form id="chat-form" class="composer">
+        <input
+          id="message"
+          type="text"
+          placeholder="Ask your assistant..."
+          autocomplete="off"
+          required
+        />
+        <button type="submit">Send</button>
+      </form>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
