@@ -96,6 +96,9 @@ STATE: dict[str, object] = {
         "avg_feedback_score": 0.0,
         "high_signal_topics": {},
         "low_signal_topics": {},
+        "interaction_topics": {},
+        "response_style_votes": {"concise": 0, "balanced": 0, "detailed": 0},
+        "confidence_bias": 0.0,
     },
 }
 AUTOPILOT_TASK: asyncio.Task | None = None
@@ -124,15 +127,28 @@ def build_smart_context_summary() -> str:
 
     high_signal_topics = learning.get("high_signal_topics", {})
     low_signal_topics = learning.get("low_signal_topics", {})
-    assert isinstance(high_signal_topics, dict) and isinstance(low_signal_topics, dict)
+    interaction_topics = learning.get("interaction_topics", {})
+    response_style_votes = learning.get("response_style_votes", {})
+    confidence_bias = float(learning.get("confidence_bias", 0.0))
+    assert (
+        isinstance(high_signal_topics, dict)
+        and isinstance(low_signal_topics, dict)
+        and isinstance(interaction_topics, dict)
+        and isinstance(response_style_votes, dict)
+    )
     preferred_topics = ", ".join(sorted(high_signal_topics, key=high_signal_topics.get, reverse=True)[:5]) or "none yet"
     avoid_topics = ", ".join(sorted(low_signal_topics, key=low_signal_topics.get, reverse=True)[:5]) or "none yet"
+    active_topics = ", ".join(sorted(interaction_topics, key=interaction_topics.get, reverse=True)[:5]) or "none yet"
+    preferred_style = max(response_style_votes, key=response_style_votes.get) if response_style_votes else "balanced"
+    confidence_mode = "proactive" if confidence_bias >= 0 else "cautious"
 
     return (
         f"You are a proactive personal assistant. {inbox_note} "
         f"Current counts -> open action items: {len(items)}, active job applications: {len(jobs)}, tracked threads: {len(threads)}. "
         f"Preferred user topics based on feedback: {preferred_topics}. Topics to avoid over-indexing: {avoid_topics}. "
-        "When asked for planning, prioritize near-term deadlines, then follow-up risk, then effort optimization."
+        f"Active conversation topics: {active_topics}. Preferred response style: {preferred_style}. Confidence mode: {confidence_mode}. "
+        "When asked for planning, prioritize near-term deadlines, then follow-up risk, then effort optimization. "
+        "Mirror the preferred style, reason in steps, and explicitly call out assumptions when uncertain."
     )
 
 
@@ -140,6 +156,32 @@ def extract_topics(message: str) -> list[str]:
     words = [word.strip(".,!?;:()[]{}\"'").lower() for word in message.split()]
     filtered = [w for w in words if len(w) >= 4 and w.isalpha()]
     return list(dict.fromkeys(filtered[:8]))
+
+
+def infer_response_style(message: str) -> str:
+    lower = message.lower()
+    if any(token in lower for token in ["quick", "brief", "short", "tldr", "concise"]):
+        return "concise"
+    if any(token in lower for token in ["deep", "detail", "thorough", "explain", "step-by-step"]):
+        return "detailed"
+    return "balanced"
+
+
+def update_interaction_learning(message: str) -> None:
+    learning = STATE["learning"]
+    assert isinstance(learning, dict)
+    interaction_topics = learning.setdefault("interaction_topics", {})
+    style_votes = learning.setdefault("response_style_votes", {"concise": 0, "balanced": 0, "detailed": 0})
+    assert isinstance(interaction_topics, dict) and isinstance(style_votes, dict)
+
+    for topic, weight in list(interaction_topics.items()):
+        interaction_topics[topic] = round(max(float(weight) * 0.92, 0.1), 3)
+
+    for topic in extract_topics(message):
+        interaction_topics[topic] = round(float(interaction_topics.get(topic, 0.0)) + 1.0, 3)
+
+    style = infer_response_style(message)
+    style_votes[style] = int(style_votes.get(style, 0)) + 1
 
 
 @app.post("/api/learning/feedback")
@@ -162,6 +204,9 @@ def record_learning_feedback(payload: LearningFeedback) -> dict:
             high_signal_topics[topic] = int(high_signal_topics.get(topic, 0)) + 1
         elif payload.score <= 2:
             low_signal_topics[topic] = int(low_signal_topics.get(topic, 0)) + 1
+    confidence_bias = float(learning.get("confidence_bias", 0.0))
+    confidence_bias += 0.1 if payload.score >= 4 else -0.12 if payload.score <= 2 else 0.0
+    learning["confidence_bias"] = round(max(min(confidence_bias, 2.0), -2.0), 3)
 
     return {"ok": True, "learning": learning}
 
@@ -179,6 +224,7 @@ def chat(payload: ChatRequest) -> dict:
     if not api_key:
         raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured.")
 
+    update_interaction_learning(payload.message)
     client = OpenAI(api_key=api_key)
     try:
         response = client.responses.create(
