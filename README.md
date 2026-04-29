@@ -2,7 +2,23 @@
 
 This repository creates a responsive assistant you can use in a browser and install like an app on desktop and mobile.
 
-## 1) Setup
+## 1) Setup (easy mode)
+
+If you do not want manual setup steps, run the installer script once and it will handle everything:
+
+```bash
+python quick_install.py
+```
+
+What it does automatically:
+- creates `.venv`
+- installs all dependencies
+- creates `.env` from `.env.example` (if missing)
+- optionally launches the app
+
+> You only need to add `OPENAI_API_KEY` in `.env` if you want OpenAI-backed responses.
+
+### Manual setup (advanced)
 
 ```bash
 python -m venv .venv
