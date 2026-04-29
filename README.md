@@ -10,7 +10,27 @@ source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 # then edit .env and set OPENAI_API_KEY
+# optional local free alternative (Ollama): set OPENAI_BASE_URL=http://localhost:11434/v1 and OPENAI_API_KEY=ollama
 ```
+
+
+### Use a fully local/free model (Ollama)
+
+If you want to run without paid API usage, you can use a local OpenAI-compatible endpoint:
+
+```bash
+ollama pull llama3.1:8b
+```
+
+Set in `.env`:
+
+```env
+OPENAI_BASE_URL=http://localhost:11434/v1
+OPENAI_API_KEY=ollama
+OPENAI_MODEL=llama3.1:8b
+```
+
+The backend will route all existing AI endpoints through that local endpoint.
 
 ## 2) Run locally
 

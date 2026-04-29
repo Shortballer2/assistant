@@ -303,10 +303,19 @@ def get_resume() -> dict:
 
 
 def require_client() -> OpenAI:
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="OPENAI_API_KEY is not configured.")
-    return OpenAI(api_key=api_key)
+    base_url = os.getenv("OPENAI_BASE_URL")
+    api_key = os.getenv("OPENAI_API_KEY") or "local"
+
+    if not os.getenv("OPENAI_API_KEY") and not base_url:
+        raise HTTPException(
+            status_code=500,
+            detail="OPENAI_API_KEY is not configured. Set OPENAI_API_KEY for hosted providers, or OPENAI_BASE_URL for local OpenAI-compatible endpoints (for example Ollama).",
+        )
+
+    client_kwargs: dict[str, str] = {"api_key": api_key}
+    if base_url:
+        client_kwargs["base_url"] = base_url
+    return OpenAI(**client_kwargs)
 
 
 @app.post("/api/resume/optimize")
