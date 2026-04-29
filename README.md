@@ -65,3 +65,42 @@ Use the Autopilot panel to start background planning loops.
 - `GET /api/autopilot/status` – shows latest run and last generated brief snapshot.
 
 The web UI now defaults to this autonomous control panel.
+
+
+## 9) Build a downloadable Windows installer (.exe)
+
+This repo now supports packaging as a native Windows desktop app where users only need to download and run an installer EXE.
+
+### Build steps (on Windows)
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+pyinstaller --noconfirm --onefile --windowed --name PersonalAssistant desktop_app.py
+```
+
+Then create an installer with Inno Setup using this script (`installer.iss`):
+
+```iss
+[Setup]
+AppName=Personal Assistant
+AppVersion=1.0.0
+DefaultDirName={autopf}\Personal Assistant
+DefaultGroupName=Personal Assistant
+OutputBaseFilename=PersonalAssistantInstaller
+Compression=lzma
+SolidCompression=yes
+
+[Files]
+Source: "dist\PersonalAssistant.exe"; DestDir: "{app}"
+
+[Icons]
+Name: "{group}\Personal Assistant"; Filename: "{app}\PersonalAssistant.exe"
+Name: "{autodesktop}\Personal Assistant"; Filename: "{app}\PersonalAssistant.exe"
+
+[Run]
+Filename: "{app}\PersonalAssistant.exe"; Description: "Launch Personal Assistant"; Flags: nowait postinstall skipifsilent
+```
+
+Compile `installer.iss` in Inno Setup to produce `PersonalAssistantInstaller.exe` that users can download and install with a standard Windows wizard.
