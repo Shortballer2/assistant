@@ -1,47 +1,25 @@
-const chat = document.getElementById("chat");
-const form = document.getElementById("chat-form");
-const input = document.getElementById("message");
+const statusEl = document.getElementById("status");
+const briefEl = document.getElementById("brief");
+const intervalEl = document.getElementById("interval");
 
-function appendMessage(text, role) {
-  const bubble = document.createElement("div");
-  bubble.className = `msg ${role}`;
-  bubble.textContent = text;
-  chat.appendChild(bubble);
-  chat.scrollTop = chat.scrollHeight;
-}
-
-appendMessage("Hi! I am your assistant. Ask me anything.", "assistant");
-
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const message = input.value.trim();
-  if (!message) return;
-
-  appendMessage(message, "user");
-  input.value = "";
-
-  try {
-    const resp = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
-    });
-
-    const data = await resp.json();
-    if (!resp.ok) {
-      appendMessage(data.detail || "Something went wrong.", "assistant");
-      return;
-    }
-
-    appendMessage(data.reply || "No response.", "assistant");
-  } catch {
-    appendMessage("Network error. Please try again.", "assistant");
-  }
+document.getElementById("start").addEventListener("click", async () => {
+  const interval = Number(intervalEl.value || 300);
+  await fetch(`/api/autopilot/start?interval_seconds=${interval}`, { method: "POST" });
+  await refresh();
 });
 
+document.getElementById("stop").addEventListener("click", async () => {
+  await fetch("/api/autopilot/stop", { method: "POST" });
+  await refresh();
+});
 
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/static/sw.js").catch(() => {});
-  });
+async function refresh() {
+  const status = await (await fetch("/api/autopilot/status")).json();
+  statusEl.textContent = JSON.stringify(status, null, 2);
+
+  const brief = await (await fetch("/api/brief")).json();
+  briefEl.textContent = JSON.stringify(brief, null, 2);
 }
+
+setInterval(refresh, 5000);
+refresh();
