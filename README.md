@@ -32,6 +32,12 @@ The backend now includes foundational modules to match the plan:
 - `POST /api/jobs` + `GET /api/jobs` – lightweight job application tracker.
 - `GET /api/brief` – generated morning brief with top outcomes, focus blocks, and due follow-ups.
 - `POST /api/learning/feedback` + `GET /api/learning/profile` – adaptive learning loop that tracks high-signal topics from user feedback and tunes assistant behavior.
+- `GET/POST /api/profile` – persistent-in-memory user profile for career targeting and retail business context.
+- `POST /api/resume/upload` + `GET /api/resume` – upload/store resume text for personalized job assets.
+- `POST /api/resume/optimize` – AI resume optimization for a specific job description.
+- `POST /api/cover-letter` – generate tailored cover letters by role/company.
+- `POST /api/jobs/match` – quick fit scoring + targeting suggestions from resume/profile vs a job description.
+- `POST /api/retail/tasks` + `GET /api/retail/tasks` – manage online retail operations tasks (inventory, marketing, support, finance, ops).
 
 These are intentionally in-memory MVP endpoints so you can quickly validate workflow before adding persistent storage and external OAuth integrations.
 
