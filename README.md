@@ -1,6 +1,6 @@
-# Personal Assistant (iPhone + Computer)
+# Personal Assistant (Desktop + iPhone + Android)
 
-This repository creates a responsive web-based assistant you can open on both iPhone and computer.
+This repository creates a responsive assistant you can use in a browser and install like an app on desktop and mobile.
 
 ## 1) Setup
 
@@ -20,8 +20,25 @@ uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 
 Open:
 - `http://localhost:8000` on your computer.
-- `http://<your-computer-local-ip>:8000` on your iPhone (same Wi-Fi).
+- `http://<your-computer-local-ip>:8000` on your iPhone/Android (same Wi-Fi).
 
-## 3) Make it available anywhere
+## 3) Install as a desktop app
 
-Deploy this app on a cloud VM or platform (Render/Fly.io/Railway). Once deployed, open the HTTPS URL from any device.
+- **Chrome / Edge (Windows, macOS, Linux):** open the app URL, then use **Install app** from the address bar (or menu).
+- **Safari (macOS):** open the app URL, then choose **File → Add to Dock**.
+
+## 4) Install on iPhone
+
+- Open the app URL in **Safari**.
+- Tap **Share** → **Add to Home Screen**.
+- Launch it from your Home Screen like a native app.
+
+## 5) Install on Android
+
+- Open the app URL in **Chrome**.
+- Tap **Install app** (or **Add to Home screen** from the menu).
+- Launch it from your app drawer/home screen.
+
+## 6) Make it available anywhere
+
+Deploy this app on a cloud VM or platform (Render/Fly.io/Railway). Once deployed over HTTPS, you can install it on desktop, iPhone, and Android.

@@ -38,3 +38,10 @@ form.addEventListener("submit", async (event) => {
     appendMessage("Network error. Please try again.", "assistant");
   }
 });
+
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/static/sw.js").catch(() => {});
+  });
+}
