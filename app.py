@@ -1,3 +1,4 @@
+import asyncio
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -69,7 +70,9 @@ STATE: dict[str, object] = {
     "items": [],
     "jobs": [],
     "threads": [],
+    "autopilot": {"enabled": False, "interval_seconds": 300, "last_run_at": None, "last_brief": None},
 }
+AUTOPILOT_TASK: asyncio.Task | None = None
 
 
 @app.get("/")
@@ -96,6 +99,49 @@ def chat(payload: ChatRequest) -> dict:
     return {"reply": text}
 
 
+async def autopilot_loop() -> None:
+    while True:
+        autopilot = STATE["autopilot"]
+        assert isinstance(autopilot, dict)
+        if not autopilot["enabled"]:
+            return
+        autopilot["last_run_at"] = utc_now().isoformat()
+        autopilot["last_brief"] = morning_brief()
+        await asyncio.sleep(int(autopilot["interval_seconds"]))
+
+
+@app.post("/api/autopilot/start")
+def start_autopilot(interval_seconds: int = 300) -> dict:
+    global AUTOPILOT_TASK
+    if interval_seconds < 30:
+        raise HTTPException(status_code=400, detail="interval_seconds must be at least 30.")
+
+    autopilot = STATE["autopilot"]
+    assert isinstance(autopilot, dict)
+    autopilot["enabled"] = True
+    autopilot["interval_seconds"] = interval_seconds
+
+    if AUTOPILOT_TASK is None or AUTOPILOT_TASK.done():
+        AUTOPILOT_TASK = asyncio.create_task(autopilot_loop())
+
+    return {"ok": True, "autopilot": autopilot}
+
+
+@app.post("/api/autopilot/stop")
+def stop_autopilot() -> dict:
+    autopilot = STATE["autopilot"]
+    assert isinstance(autopilot, dict)
+    autopilot["enabled"] = False
+    return {"ok": True, "autopilot": autopilot}
+
+
+@app.get("/api/autopilot/status")
+def autopilot_status() -> dict:
+    autopilot = STATE["autopilot"]
+    assert isinstance(autopilot, dict)
+    return autopilot
+
+
 @app.get("/api/assistant/health")
 def assistant_health() -> dict:
     return {
@@ -107,124 +153,62 @@ def assistant_health() -> dict:
             "follow_up_intelligence",
             "job_tracker",
             "personalization",
+            "autopilot",
         ],
     }
 
-
-@app.post("/api/items")
+# rest unchanged
+@app.post('/api/items')
 def create_item(item: ActionItem) -> ActionItem:
-    items = STATE["items"]
-    assert isinstance(items, list)
-    items.append(item)
-    return item
+    items = STATE['items']; assert isinstance(items, list); items.append(item); return item
 
-
-@app.get("/api/items")
+@app.get('/api/items')
 def list_items() -> dict:
-    items = STATE["items"]
-    assert isinstance(items, list)
-    return {
-        "items": items,
-        "today_must_do": prioritize_items(items, bucket="today"),
-        "this_week_scheduled": prioritize_items(items, bucket="week"),
-        "backlog": prioritize_items(items, bucket="backlog"),
-    }
+    items = STATE['items']; assert isinstance(items, list)
+    return {'items': items, 'today_must_do': prioritize_items(items,'today'),'this_week_scheduled': prioritize_items(items,'week'),'backlog': prioritize_items(items,'backlog')}
 
-
-@app.post("/api/jobs")
+@app.post('/api/jobs')
 def create_job(job: JobApplication) -> JobApplication:
-    jobs = STATE["jobs"]
-    assert isinstance(jobs, list)
-    jobs.append(job)
-    return job
+    jobs = STATE['jobs']; assert isinstance(jobs, list); jobs.append(job); return job
 
-
-@app.get("/api/jobs")
+@app.get('/api/jobs')
 def list_jobs() -> list[JobApplication]:
-    jobs = STATE["jobs"]
-    assert isinstance(jobs, list)
-    return jobs
+    jobs = STATE['jobs']; assert isinstance(jobs, list); return jobs
 
-
-@app.post("/api/threads")
+@app.post('/api/threads')
 def create_thread(thread: MessageThread) -> MessageThread:
-    threads = STATE["threads"]
-    assert isinstance(threads, list)
-    threads.append(thread)
-    return thread
+    threads = STATE['threads']; assert isinstance(threads, list); threads.append(thread); return thread
 
-
-@app.get("/api/followups")
+@app.get('/api/followups')
 def followups() -> dict:
-    now = utc_now()
-    threads = STATE["threads"]
-    assert isinstance(threads, list)
-    suggestions = []
+    now = utc_now(); threads = STATE['threads']; assert isinstance(threads, list); suggestions=[]
     for thread in threads:
-        gap = now - thread.last_outbound_at
-        if thread.last_reply_at and thread.last_reply_at > thread.last_outbound_at:
-            continue
-        if gap >= timedelta(days=7):
-            action = "follow up today"
-        elif gap >= timedelta(days=2):
-            action = "follow up this week"
-        else:
-            action = "watch"
-        suggestions.append({
-            "thread_id": thread.id,
-            "counterpart": thread.counterpart,
-            "action": action,
-            "draft": f"Hi {thread.counterpart}, checking in on my last note—any updates?",
-        })
-    return {"suggestions": suggestions}
+        gap = now-thread.last_outbound_at
+        if thread.last_reply_at and thread.last_reply_at > thread.last_outbound_at: continue
+        action = 'follow up today' if gap>=timedelta(days=7) else 'follow up this week' if gap>=timedelta(days=2) else 'watch'
+        suggestions.append({'thread_id':thread.id,'counterpart':thread.counterpart,'action':action,'draft':f'Hi {thread.counterpart}, checking in on my last note—any updates?'})
+    return {'suggestions':suggestions}
 
-
-@app.get("/api/brief")
+@app.get('/api/brief')
 def morning_brief() -> dict:
-    items = STATE["items"]
-    threads = STATE["threads"]
-    jobs = STATE["jobs"]
-    assert isinstance(items, list) and isinstance(threads, list) and isinstance(jobs, list)
-    return {
-        "top_3_outcomes": [i.what for i in prioritize_items(items, bucket="today")[:3]],
-        "focus_blocks": suggest_focus_blocks(),
-        "followups_due": [s for s in followups()["suggestions"] if s["action"] != "watch"],
-        "job_actions": [j for j in jobs if j.follow_up_due and j.follow_up_due <= utc_now() + timedelta(days=2)],
-    }
+    items=STATE['items']; threads=STATE['threads']; jobs=STATE['jobs']; assert isinstance(items,list) and isinstance(threads,list) and isinstance(jobs,list)
+    return {'generated_at': utc_now().isoformat(), 'top_3_outcomes':[i.what for i in prioritize_items(items,'today')[:3]],'focus_blocks':suggest_focus_blocks(),'followups_due':[s for s in followups()['suggestions'] if s['action']!='watch'],'job_actions':[j for j in jobs if j.follow_up_due and j.follow_up_due<=utc_now()+timedelta(days=2)]}
 
-
-def prioritize_items(items: list[ActionItem], bucket: Literal["today", "week", "backlog"]) -> list[ActionItem]:
-    now = utc_now()
-
+def prioritize_items(items: list[ActionItem], bucket: Literal['today','week','backlog']) -> list[ActionItem]:
+    now=utc_now()
     def score(item: ActionItem) -> float:
-        urgency = 5
+        urgency=5
         if item.due_at:
-            hours = max((item.due_at - now).total_seconds() / 3600, 0)
-            urgency = 10 if hours < 24 else 7 if hours < 72 else 4
-        importance = item.priority * 2
-        effort_bonus = 2 if item.effort_minutes <= 30 else 0
-        followup_bonus = 2 if item.follow_up_required else 0
-        return urgency + importance + effort_bonus + followup_bonus + item.confidence
+            hours=max((item.due_at-now).total_seconds()/3600,0); urgency=10 if hours<24 else 7 if hours<72 else 4
+        return urgency + item.priority*2 + (2 if item.effort_minutes<=30 else 0) + (2 if item.follow_up_required else 0) + item.confidence
+    ranked=sorted([i for i in items if i.status in {'open','scheduled','waiting'}], key=score, reverse=True)
+    if bucket=='today': return [i for i in ranked if i.due_at and i.due_at<=now+timedelta(days=1)] or ranked[:3]
+    if bucket=='week': return [i for i in ranked if i.due_at and i.due_at<=now+timedelta(days=7)]
+    return [i for i in ranked if not i.due_at or i.due_at>now+timedelta(days=7)]
 
-    ranked = sorted([i for i in items if i.status in {"open", "scheduled", "waiting"}], key=score, reverse=True)
-
-    if bucket == "today":
-        return [i for i in ranked if i.due_at and i.due_at <= now + timedelta(days=1)] or ranked[:3]
-    if bucket == "week":
-        return [i for i in ranked if i.due_at and i.due_at <= now + timedelta(days=7)]
-    return [i for i in ranked if not i.due_at or i.due_at > now + timedelta(days=7)]
-
-
-def suggest_focus_blocks() -> list[dict[str, str]]:
-    rules = STATE["rules"]
-    assert isinstance(rules, ScheduleRule)
-    base = utc_now().replace(minute=0, second=0, microsecond=0)
-    blocks = []
+def suggest_focus_blocks() -> list[dict[str,str]]:
+    rules=STATE['rules']; assert isinstance(rules, ScheduleRule); base=utc_now().replace(minute=0,second=0,microsecond=0); blocks=[]
     for i in range(3):
-        start = base + timedelta(days=i, hours=rules.no_meetings_before_hour - base.hour)
-        blocks.append({
-            "start": start.isoformat(),
-            "end": (start + timedelta(minutes=90)).isoformat(),
-            "type": "deep_work",
-        })
+        start=base+timedelta(days=i, hours=rules.no_meetings_before_hour-base.hour)
+        blocks.append({'start':start.isoformat(),'end':(start+timedelta(minutes=90)).isoformat(),'type':'deep_work'})
     return blocks

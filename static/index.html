@@ -3,34 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0f172a" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Assistant" />
-    <link rel="manifest" href="/static/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/static/icons/icon.svg" />
     <title>My Assistant</title>
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
     <main class="app">
       <h1>My Assistant</h1>
-      <p class="subtitle">Works on iPhone and computer browser.</p>
+      <p class="subtitle">Autonomous mode runs even when you are not actively chatting.</p>
 
-      <section id="chat" class="chat"></section>
+      <section class="card">
+        <h2>Autopilot</h2>
+        <div class="row">
+          <input id="interval" type="number" min="30" value="300" />
+          <button id="start">Start</button>
+          <button id="stop" class="secondary">Stop</button>
+        </div>
+        <pre id="status" class="panel">Loading...</pre>
+      </section>
 
-      <form id="chat-form" class="composer">
-        <input
-          id="message"
-          type="text"
-          placeholder="Ask your assistant..."
-          autocomplete="off"
-          required
-        />
-        <button type="submit">Send</button>
-      </form>
+      <section class="card">
+        <h2>Latest Brief</h2>
+        <pre id="brief" class="panel">No brief generated yet.</pre>
+      </section>
     </main>
-
     <script src="/static/app.js"></script>
   </body>
 </html>

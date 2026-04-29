@@ -54,3 +54,14 @@ These are intentionally in-memory MVP endpoints so you can quickly validate work
 ## 7) Make it available anywhere
 
 Deploy this app on a cloud VM or platform (Render/Fly.io/Railway). Once deployed over HTTPS, you can install it on desktop, iPhone, and Android.
+
+
+## 8) Run in autonomous mode (no chat required)
+
+Use the Autopilot panel to start background planning loops.
+
+- `POST /api/autopilot/start?interval_seconds=300` – starts autonomous brief generation.
+- `POST /api/autopilot/stop` – stops it.
+- `GET /api/autopilot/status` – shows latest run and last generated brief snapshot.
+
+The web UI now defaults to this autonomous control panel.
