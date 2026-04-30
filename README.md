@@ -48,6 +48,25 @@ OPENAI_MODEL=llama3.1:8b
 
 The backend will route all existing AI endpoints through that local endpoint.
 
+## 2) Deploy (recommended if you do **not** want local hosting)
+
+If you do not want to run this on your own computer, deploy it to a cloud platform and use the hosted URL on desktop and mobile.
+
+### Render quick deploy
+
+1. Push this repo to GitHub.
+2. In Render, create a **Web Service** from the repo.
+3. Use:
+   - **Runtime:** Python 3
+   - **Build command:** `pip install -r requirements.txt`
+   - **Start command:** `uvicorn app:app --host 0.0.0.0 --port $PORT`
+4. Add environment variables:
+   - `OPENAI_API_KEY=<your key>`
+   - `OPENAI_MODEL=gpt-4.1-mini` (or your preferred model)
+5. Deploy and open the generated `https://...onrender.com` URL.
+
+Once live over HTTPS, use that URL to install the app on iPhone/Android/desktop as a PWA.
+
 ## 2) Run locally
 
 ```bash
