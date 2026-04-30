@@ -7,11 +7,17 @@
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
+    <div class="ambient ambient-1"></div>
+    <div class="ambient ambient-2"></div>
+
     <main class="app">
       <header class="hero card">
-        <p class="eyebrow">AI EXECUTIVE ASSISTANT</p>
+        <div class="hero-top">
+          <p class="eyebrow">AI EXECUTIVE ASSISTANT</p>
+          <span class="badge">Live Workspace</span>
+        </div>
         <h1>My Assistant</h1>
-        <p class="subtitle">A cleaner command center for planning, inbox triage, and action-focused execution.</p>
+        <p class="subtitle">A beautiful command center for planning, inbox triage, and action-focused execution.</p>
       </header>
 
       <section class="card glow">
@@ -41,15 +47,15 @@
       <section class="card glow">
         <h2>Smart Brief</h2>
         <div class="brief-grid">
-          <div>
+          <div class="subpanel">
             <h3>Top Outcomes</h3>
             <ul id="brief-outcomes" class="list"></ul>
           </div>
-          <div>
+          <div class="subpanel">
             <h3>Follow-ups</h3>
             <ul id="brief-followups" class="list"></ul>
           </div>
-          <div>
+          <div class="subpanel">
             <h3>Focus Blocks</h3>
             <ul id="brief-focus" class="list"></ul>
           </div>
@@ -75,15 +81,15 @@
         </div>
 
         <div class="status-grid spaced-top">
-          <div>
+          <div class="subpanel">
             <h3>Connected Accounts</h3>
             <ul id="connections" class="list"></ul>
           </div>
-          <div>
+          <div class="subpanel">
             <h3>Inbox Snapshot</h3>
             <ul id="inbox" class="list"></ul>
           </div>
-          <div>
+          <div class="subpanel">
             <h3>Autopilot Status</h3>
             <ul id="status" class="list"></ul>
           </div>
