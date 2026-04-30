@@ -1,4 +1,4 @@
-const CACHE_NAME = "assistant-cache-v3";
+const CACHE_NAME = "assistant-cache-v4";
 const APP_ASSETS = ["/", "/static/style.css", "/static/app.js", "/static/manifest.webmanifest", "/static/icons/icon.svg", "/static/icons/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
@@ -13,5 +13,13 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
-  event.respondWith(caches.match(event.request).then((cached) => cached || fetch(event.request).catch(() => caches.match("/"))));
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("/")))
+  );
 });
