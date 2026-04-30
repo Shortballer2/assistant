@@ -1,4 +1,4 @@
-const CACHE_NAME = "assistant-cache-v1";
+const CACHE_NAME = "assistant-cache-v3";
 const APP_ASSETS = ["/", "/static/style.css", "/static/app.js", "/static/manifest.webmanifest", "/static/icons/icon.svg", "/static/icons/icon-maskable.svg"];
 
 self.addEventListener("install", (event) => {
