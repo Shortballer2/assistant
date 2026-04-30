@@ -110,9 +110,26 @@ Use the Autopilot panel to start background planning loops.
 The web UI now defaults to this autonomous control panel.
 
 
-## 9) Build a downloadable Windows installer (.exe)
+## 9) Build a **real desktop application** (no browser required)
 
-This repo now supports packaging as a native Windows desktop app where users only need to download and run an installer EXE.
+If you do **not** want users to run a localhost command manually, package this project as a native desktop binary.
+The included `desktop_app.py` boots the FastAPI backend in-process and opens a native app window with `pywebview`, so users launch it like any normal desktop app.
+
+### Quick build (Windows/macOS/Linux)
+
+```bash
+python build_desktop.py
+```
+
+This creates a standalone binary in `dist/`:
+- Windows: `dist/PersonalAssistant.exe`
+- macOS/Linux: `dist/PersonalAssistant`
+
+Users can run that binary directly without opening a terminal or browser.
+
+## 10) Build a downloadable Windows installer (.exe)
+
+For a polished Windows distribution, wrap the desktop binary in a standard installer wizard.
 
 ### Build steps (on Windows)
 
@@ -120,7 +137,7 @@ This repo now supports packaging as a native Windows desktop app where users onl
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-pyinstaller --noconfirm --onefile --windowed --name PersonalAssistant desktop_app.py
+python build_desktop.py
 ```
 
 Then create an installer with Inno Setup using this script (`installer.iss`):
