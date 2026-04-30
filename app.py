@@ -162,6 +162,14 @@ def index() -> FileResponse:
     return FileResponse(static_dir / "index.html")
 
 
+@app.get("/download/windows")
+def download_windows_installer() -> FileResponse:
+    installer_path = Path(__file__).parent / "Output" / "PersonalAssistantInstaller.exe"
+    if not installer_path.exists():
+        raise HTTPException(status_code=404, detail="Windows installer is not available yet.")
+    return FileResponse(installer_path, filename="PersonalAssistantInstaller.exe", media_type="application/octet-stream")
+
+
 def build_smart_context_summary() -> str:
     items = STATE["items"]
     jobs = STATE["jobs"]
