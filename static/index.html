@@ -9,11 +9,12 @@
   <body>
     <main class="app">
       <header class="hero card">
+        <p class="eyebrow">AI EXECUTIVE ASSISTANT</p>
         <h1>My Assistant</h1>
-        <p class="subtitle">Plan your day, ask questions, and get clear next actions in one place.</p>
+        <p class="subtitle">A cleaner command center for planning, inbox triage, and action-focused execution.</p>
       </header>
 
-      <section class="card">
+      <section class="card glow">
         <h2>Install on Windows</h2>
         <p class="hint">No setup required. Click once to download the installer, run it, and open the app.</p>
         <div class="row">
@@ -21,7 +22,7 @@
         </div>
       </section>
 
-      <section class="card">
+      <section class="card glow">
         <h2>Ask Assistant</h2>
         <p class="hint">Try: “Plan my top priorities for today” or “Draft a follow-up message for my recruiter.”</p>
         <div class="row stack-mobile">
@@ -37,7 +38,7 @@
         <article id="chat-output" class="panel rich">Your assistant response will appear here.</article>
       </section>
 
-      <section class="card">
+      <section class="card glow">
         <h2>Smart Brief</h2>
         <div class="brief-grid">
           <div>
@@ -55,15 +56,16 @@
         </div>
       </section>
 
-      <section class="card">
+      <section class="card glow">
         <h2>Email + Autopilot</h2>
         <div class="row stack-mobile">
           <select id="provider">
             <option value="gmail">Gmail</option>
             <option value="microsoft">Microsoft</option>
           </select>
-          <input id="email" type="email" placeholder="you@example.com" />
+          <input id="email" type="email" placeholder="Manual account label (optional)" />
           <button id="connect-email">Connect</button>
+          <button id="connect-gmail-oauth" class="secondary">Connect Gmail (Real OAuth)</button>
         </div>
 
         <div class="row stack-mobile spaced-top">
