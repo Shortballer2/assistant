@@ -93,6 +93,8 @@ The backend now includes foundational modules to match the plan:
 - `POST /api/cover-letter` – generate tailored cover letters by role/company.
 - `POST /api/jobs/match` – quick fit scoring + targeting suggestions from resume/profile vs a job description.
 - `POST /api/retail/tasks` + `GET /api/retail/tasks` – manage online retail operations tasks (inventory, marketing, support, finance, ops).
+- `POST /api/email/connect` + `GET /api/email/connections` – connect account identities (Gmail or Microsoft).
+- `POST /api/email/messages` + `GET /api/email/messages` – ingest and view inbox messages tied to connected accounts.
 - `POST /api/chat` – text-only assistant Q&A.
 - `POST /api/chat/files` – assistant Q&A with uploaded files (PDF, PPTX, images, audio, video, and other OpenAI-supported file types).
 
