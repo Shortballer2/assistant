@@ -8,9 +8,7 @@ const chatInputEl = document.getElementById("chat-input");
 const chatFilesEl = document.getElementById("chat-files");
 const chatOutputEl = document.getElementById("chat-output");
 const chatStatusEl = document.getElementById("chat-status");
-const briefOutcomesEl = document.getElementById("brief-outcomes");
-const briefFollowupsEl = document.getElementById("brief-followups");
-const briefFocusEl = document.getElementById("brief-focus");
+const connectionCardsEl = document.getElementById("connection-cards");
 
 function renderList(container, items, fallback = "Nothing yet") {
   container.innerHTML = "";
@@ -108,9 +106,8 @@ document.getElementById("connect-gmail-oauth").addEventListener("click", async (
 });
 
 async function refresh() {
-  const [status, brief, connectionData, inboxData] = await Promise.all([
+  const [status, connectionData, inboxData] = await Promise.all([
     (await fetch("/api/autopilot/status")).json(),
-    (await fetch("/api/brief")).json(),
     (await fetch("/api/email/connections")).json(),
     (await fetch("/api/email/messages")).json(),
   ]);
@@ -133,7 +130,7 @@ async function refresh() {
   for (const connection of gmailConnections) {
     await fetch(`/api/email/gmail/sync/${connection.id}`, { method: "POST" });
   }
-  const summary = brief.inbox_summary || { unread: 0, needs_reply: 0 };
+  const summary = inboxData.summary || { unread: 0, needs_reply: 0 };
   const latestMessages = (inboxData.messages || []).slice(0, 3).map((m) => {
     const sender = m.from_name || m.from_email;
     return `${sender}: ${m.subject}`;
@@ -144,18 +141,22 @@ async function refresh() {
     "No inbox messages yet"
   );
 
-  renderList(briefOutcomesEl, brief.top_3_outcomes || [], "No priorities yet");
-  renderList(
-    briefFollowupsEl,
-    (brief.followups_due || []).map((f) => `${f.counterpart}: ${f.action}`),
-    "No follow-ups due"
-  );
-  renderList(
-    briefFocusEl,
-    (brief.focus_blocks || []).map((b) => `${new Date(b.start).toLocaleString()} → ${new Date(b.end).toLocaleTimeString()}`),
-    "No focus blocks"
-  );
+  connectionCardsEl.innerHTML = "";
+  for (const conn of (connectionData.connections || [])) {
+    const card = document.createElement("div");
+    card.className = "connection-card";
+    card.innerHTML = `<strong>${conn.provider.toUpperCase()}</strong><div>${conn.account_email}</div><div class="connection-status">Status: ${conn.status}</div>`;
+    connectionCardsEl.appendChild(card);
+  }
+  if ((connectionData.connections || []).length === 0) {
+    connectionCardsEl.innerHTML = '<div class="connection-card">No accounts connected yet.</div>';
+  }
 }
 
 setInterval(refresh, 5000);
 refresh();
+
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/static/sw.js").catch(() => {});
+}

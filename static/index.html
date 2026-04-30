@@ -17,53 +17,12 @@
           <span class="badge">Live Workspace</span>
         </div>
         <h1>My Assistant</h1>
-        <p class="subtitle">A beautiful command center for planning, inbox triage, and action-focused execution.</p>
+        <p class="subtitle">A modern command center for planning, inbox triage, and action-focused execution.</p>
       </header>
 
       <section class="card glow">
-        <h2>Install on Windows</h2>
-        <p class="hint">No setup required. Click once to download the installer, run it, and open the app.</p>
-        <div class="row">
-          <a href="/download/windows" class="button-link">Download Windows Installer (.exe)</a>
-        </div>
-      </section>
-
-      <section class="card glow">
-        <h2>Ask Assistant</h2>
-        <p class="hint">Try: “Plan my top priorities for today” or “Draft a follow-up message for my recruiter.”</p>
-        <div class="row stack-mobile">
-          <textarea id="chat-input" rows="4" placeholder="What do you need help with right now?"></textarea>
-        </div>
-        <div class="row stack-mobile spaced-top">
-          <input id="chat-files" type="file" multiple />
-        </div>
-        <div class="row">
-          <button id="send-chat">Get Help</button>
-          <span id="chat-status" class="hint"></span>
-        </div>
-        <article id="chat-output" class="panel rich">Your assistant response will appear here.</article>
-      </section>
-
-      <section class="card glow">
-        <h2>Smart Brief</h2>
-        <div class="brief-grid">
-          <div class="subpanel">
-            <h3>Top Outcomes</h3>
-            <ul id="brief-outcomes" class="list"></ul>
-          </div>
-          <div class="subpanel">
-            <h3>Follow-ups</h3>
-            <ul id="brief-followups" class="list"></ul>
-          </div>
-          <div class="subpanel">
-            <h3>Focus Blocks</h3>
-            <ul id="brief-focus" class="list"></ul>
-          </div>
-        </div>
-      </section>
-
-      <section class="card glow">
-        <h2>Email + Autopilot</h2>
+        <h2>Account Connections</h2>
+        <p class="hint">Connect your providers to power briefings, inbox snapshots, and autopilot actions.</p>
         <div class="row stack-mobile">
           <select id="provider">
             <option value="gmail">Gmail</option>
@@ -71,10 +30,15 @@
           </select>
           <input id="email" type="email" placeholder="Manual account label (optional)" />
           <button id="connect-email">Connect</button>
-          <button id="connect-gmail-oauth" class="secondary">Connect Gmail (Real OAuth)</button>
+          <button id="connect-gmail-oauth" class="secondary">Connect Gmail (OAuth)</button>
         </div>
 
-        <div class="row stack-mobile spaced-top">
+        <div id="connection-cards" class="cards-grid spaced-top"></div>
+      </section>
+
+      <section class="card glow">
+        <h2>Autopilot + Inbox</h2>
+        <div class="row stack-mobile">
           <input id="interval" type="number" min="30" value="300" />
           <button id="start">Start autopilot</button>
           <button id="stop" class="secondary">Stop autopilot</button>
@@ -94,6 +58,21 @@
             <ul id="status" class="list"></ul>
           </div>
         </div>
+      </section>
+
+      <section class="card glow">
+        <h2>Ask Assistant</h2>
+        <div class="row stack-mobile">
+          <textarea id="chat-input" rows="4" placeholder="What do you need help with right now?"></textarea>
+        </div>
+        <div class="row stack-mobile spaced-top">
+          <input id="chat-files" type="file" multiple />
+        </div>
+        <div class="row">
+          <button id="send-chat">Get Help</button>
+          <span id="chat-status" class="hint"></span>
+        </div>
+        <article id="chat-output" class="panel rich">Your assistant response will appear here.</article>
       </section>
     </main>
     <script src="/static/app.js"></script>
