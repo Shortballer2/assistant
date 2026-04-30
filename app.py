@@ -28,6 +28,13 @@ class ChatRequest(BaseModel):
     message: str
 
 
+class UploadedAsset(BaseModel):
+    id: str
+    filename: str
+    content_type: str = "application/octet-stream"
+    bytes: int
+    uploaded_at: str
+
 
 
 class UserProfile(BaseModel):
@@ -145,6 +152,7 @@ STATE: dict[str, object] = {
         "response_style_votes": {"concise": 0, "balanced": 0, "detailed": 0},
         "confidence_bias": 0.0,
     },
+    "uploaded_assets": [],
 }
 AUTOPILOT_TASK: asyncio.Task | None = None
 
@@ -406,6 +414,59 @@ def chat(payload: ChatRequest) -> dict:
         raise HTTPException(status_code=500, detail=f"Assistant error: {exc}") from exc
 
     return {"reply": text}
+
+
+@app.post("/api/chat/files")
+async def chat_with_files(message: str = Form(...), files: list[UploadFile] = File(...)) -> dict:
+    update_interaction_learning(message)
+    client = require_client()
+    uploaded_assets = STATE["uploaded_assets"]
+    assert isinstance(uploaded_assets, list)
+
+    if not files:
+        raise HTTPException(status_code=400, detail="Please attach at least one file.")
+
+    user_content: list[dict] = [{"type": "input_text", "text": message}]
+    ingested_files: list[UploadedAsset] = []
+
+    for upload in files:
+        data = await upload.read()
+        if not data:
+            continue
+        try:
+            uploaded = client.files.create(file=(upload.filename or "upload.bin", data), purpose="user_data")
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"Could not process file {upload.filename}: {exc}") from exc
+
+        user_content.append({"type": "input_file", "file_id": uploaded.id})
+        asset = UploadedAsset(
+            id=uploaded.id,
+            filename=upload.filename or "upload.bin",
+            content_type=upload.content_type or "application/octet-stream",
+            bytes=len(data),
+            uploaded_at=utc_now().isoformat(),
+        )
+        ingested_files.append(asset)
+        uploaded_assets.append(asset)
+
+    if len(ingested_files) == 0:
+        raise HTTPException(status_code=400, detail="No readable file data found in attachments.")
+
+    try:
+        response = client.responses.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+            input=[
+                {"role": "system", "content": build_smart_context_summary()},
+                {"role": "user", "content": user_content},
+            ],
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"Assistant error: {exc}") from exc
+
+    return {
+        "reply": response.output_text,
+        "files": [asset.model_dump() for asset in ingested_files],
+    }
 
 
 @app.post("/api/email/connect")

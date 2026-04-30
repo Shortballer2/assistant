@@ -74,6 +74,8 @@ The backend now includes foundational modules to match the plan:
 - `POST /api/cover-letter` – generate tailored cover letters by role/company.
 - `POST /api/jobs/match` – quick fit scoring + targeting suggestions from resume/profile vs a job description.
 - `POST /api/retail/tasks` + `GET /api/retail/tasks` – manage online retail operations tasks (inventory, marketing, support, finance, ops).
+- `POST /api/chat` – text-only assistant Q&A.
+- `POST /api/chat/files` – assistant Q&A with uploaded files (PDF, PPTX, images, audio, video, and other OpenAI-supported file types).
 
 These are intentionally in-memory MVP endpoints so you can quickly validate workflow before adding persistent storage and external OAuth integrations.
 
