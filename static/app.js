@@ -1,9 +1,62 @@
 const statusEl = document.getElementById("status");
-const briefEl = document.getElementById("brief");
 const intervalEl = document.getElementById("interval");
 const providerEl = document.getElementById("provider");
 const emailEl = document.getElementById("email");
 const connectionsEl = document.getElementById("connections");
+const chatInputEl = document.getElementById("chat-input");
+const chatOutputEl = document.getElementById("chat-output");
+const chatStatusEl = document.getElementById("chat-status");
+const briefOutcomesEl = document.getElementById("brief-outcomes");
+const briefFollowupsEl = document.getElementById("brief-followups");
+const briefFocusEl = document.getElementById("brief-focus");
+
+function renderList(container, items, fallback = "Nothing yet") {
+  container.innerHTML = "";
+  if (!items || items.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = fallback;
+    container.appendChild(li);
+    return;
+  }
+
+  for (const text of items) {
+    const li = document.createElement("li");
+    li.textContent = text;
+    container.appendChild(li);
+  }
+}
+
+async function sendChat() {
+  const message = chatInputEl.value.trim();
+  if (!message) return;
+
+  chatStatusEl.textContent = "Thinking…";
+  chatOutputEl.textContent = "";
+
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Assistant error");
+
+    chatOutputEl.textContent = payload.reply || "No reply returned.";
+    chatStatusEl.textContent = "";
+  } catch (error) {
+    chatOutputEl.textContent = `Sorry, I couldn't process that request. ${error.message}`;
+    chatStatusEl.textContent = "";
+  }
+}
+
+document.getElementById("send-chat").addEventListener("click", sendChat);
+chatInputEl.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    sendChat();
+  }
+});
 
 document.getElementById("start").addEventListener("click", async () => {
   const interval = Number(intervalEl.value || 300);
@@ -31,14 +84,37 @@ document.getElementById("connect-email").addEventListener("click", async () => {
 });
 
 async function refresh() {
-  const status = await (await fetch("/api/autopilot/status")).json();
-  statusEl.textContent = JSON.stringify(status, null, 2);
+  const [status, brief, connectionData] = await Promise.all([
+    (await fetch("/api/autopilot/status")).json(),
+    (await fetch("/api/brief")).json(),
+    (await fetch("/api/email/connections")).json(),
+  ]);
 
-  const brief = await (await fetch("/api/brief")).json();
-  briefEl.textContent = JSON.stringify(brief, null, 2);
+  renderList(statusEl, [
+    `State: ${status.enabled ? "running" : "stopped"}`,
+    `Interval: every ${status.interval_seconds}s`,
+    `Last run: ${status.last_run_at ? new Date(status.last_run_at).toLocaleString() : "not run yet"}`,
+  ]);
 
-  const connectionData = await (await fetch("/api/email/connections")).json();
-  connectionsEl.textContent = JSON.stringify(connectionData, null, 2);
+  renderList(
+    connectionsEl,
+    (connectionData.connections || [])
+      .filter((c) => c.status === "connected")
+      .map((c) => `${c.provider}: ${c.account_email}`),
+    "No accounts connected"
+  );
+
+  renderList(briefOutcomesEl, brief.top_3_outcomes || [], "No priorities yet");
+  renderList(
+    briefFollowupsEl,
+    (brief.followups_due || []).map((f) => `${f.counterpart}: ${f.action}`),
+    "No follow-ups due"
+  );
+  renderList(
+    briefFocusEl,
+    (brief.focus_blocks || []).map((b) => `${new Date(b.start).toLocaleString()} → ${new Date(b.end).toLocaleTimeString()}`),
+    "No focus blocks"
+  );
 }
 
 setInterval(refresh, 5000);
