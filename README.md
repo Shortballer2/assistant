@@ -127,11 +127,11 @@ This creates a standalone binary in `dist/`:
 
 Users can run that binary directly without opening a terminal or browser.
 
-## 10) Build a downloadable Windows installer (.exe)
+## 10) One-click Windows download (.exe installer)
 
-For a polished Windows distribution, wrap the desktop binary in a standard installer wizard.
+If you want users to just click and install, publish a signed Windows installer `.exe` as a GitHub Release asset.
 
-### Build steps (on Windows)
+### Build steps (Windows)
 
 ```bash
 python -m venv .venv
@@ -140,27 +140,25 @@ pip install -r requirements.txt
 python build_desktop.py
 ```
 
-Then create an installer with Inno Setup using this script (`installer.iss`):
+Build the installer with Inno Setup:
 
-```iss
-[Setup]
-AppName=Personal Assistant
-AppVersion=1.0.0
-DefaultDirName={autopf}\Personal Assistant
-DefaultGroupName=Personal Assistant
-OutputBaseFilename=PersonalAssistantInstaller
-Compression=lzma
-SolidCompression=yes
-
-[Files]
-Source: "dist\PersonalAssistant.exe"; DestDir: "{app}"
-
-[Icons]
-Name: "{group}\Personal Assistant"; Filename: "{app}\PersonalAssistant.exe"
-Name: "{autodesktop}\Personal Assistant"; Filename: "{app}\PersonalAssistant.exe"
-
-[Run]
-Filename: "{app}\PersonalAssistant.exe"; Description: "Launch Personal Assistant"; Flags: nowait postinstall skipifsilent
+```bash
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
 ```
 
-Compile `installer.iss` in Inno Setup to produce `PersonalAssistantInstaller.exe` that users can download and install with a standard Windows wizard.
+Output:
+- `dist/PersonalAssistantInstaller.exe`
+
+### Publish for one-click install
+
+1. Push your changes and create a GitHub Release (for example, `v1.0.0`).
+2. Upload `dist/PersonalAssistantInstaller.exe` as a Release asset.
+3. Share the direct download URL from that Release.
+
+End-user flow is then:
+- Click download link
+- Open `PersonalAssistantInstaller.exe`
+- Click through the installer wizard
+- Launch **Personal Assistant** from Start Menu/Desktop shortcut
+
+> Recommended: code-sign `PersonalAssistantInstaller.exe` so Windows SmartScreen warnings are reduced for users.
