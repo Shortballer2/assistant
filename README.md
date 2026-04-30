@@ -155,7 +155,7 @@ Output:
 
 1. Push your changes and create a GitHub Release (for example, `v1.0.0`).
 2. Upload `dist/PersonalAssistantInstaller.exe` as a Release asset.
-3. Share the direct download URL from that Release.
+3. Share the direct download URL from that Release, or host the installer at your app's `/download/windows` endpoint.
 
 End-user flow is then:
 - Click download link

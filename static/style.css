@@ -32,6 +32,22 @@ input[type="email"] { min-width:260px; }
 textarea { width:100%; min-height:110px; resize:vertical; }
 button { background:var(--accent); color:#051431; font-weight:600; cursor:pointer; border:none; }
 button.secondary { background:#243057; color:var(--text); }
+
+.button-link {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--accent);
+  color:#051431;
+  font-weight:600;
+  text-decoration:none;
+  border-radius:10px;
+  padding:10px 12px;
+}
+
+.button-link:hover {
+  filter:brightness(1.05);
+}
 .panel { background:#0e152b; padding:12px; border-radius:10px; overflow:auto; min-height:120px; }
 .rich { white-space:pre-wrap; line-height:1.5; }
 .brief-grid, .status-grid { display:grid; grid-template-columns:repeat(2, minmax(220px, 1fr)); gap:12px; }
