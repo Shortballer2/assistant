@@ -6,9 +6,11 @@ from typing import Literal
 from uuid import uuid4
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from google_auth_oauthlib.flow import Flow
+from googleapiclient.discovery import build
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
@@ -22,6 +24,78 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+
+
+def build_gmail_oauth_flow(state: str | None = None) -> Flow:
+    client_id = os.getenv("GMAIL_CLIENT_ID", "")
+    client_secret = os.getenv("GMAIL_CLIENT_SECRET", "")
+    redirect_uri = os.getenv("GMAIL_REDIRECT_URI", "")
+    if not client_id or not client_secret or not redirect_uri:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing Gmail OAuth config. Set GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, and GMAIL_REDIRECT_URI.",
+        )
+    config = {
+        "web": {
+            "client_id": client_id,
+            "project_id": "personal-assistant",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_secret": client_secret,
+            "redirect_uris": [redirect_uri],
+        }
+    }
+    flow = Flow.from_client_config(config, scopes=GMAIL_SCOPES, state=state)
+    flow.redirect_uri = redirect_uri
+    return flow
+
+
+def ingest_gmail_messages(connection_id: str, limit: int = 10) -> list[EmailMessage]:
+    oauth_sessions = STATE.get("oauth_sessions", {})
+    email_connections = STATE["email_connections"]
+    emails = STATE["emails"]
+    assert isinstance(oauth_sessions, dict) and isinstance(email_connections, list) and isinstance(emails, list)
+
+    session = oauth_sessions.get(connection_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="No Gmail OAuth session found for this connection.")
+
+    credentials = session.get("credentials")
+    if not credentials:
+        raise HTTPException(status_code=400, detail="Gmail credentials missing for this connection.")
+
+    service = build("gmail", "v1", credentials=credentials)
+    listing = service.users().messages().list(userId="me", maxResults=limit).execute()
+    imported: list[EmailMessage] = []
+    for meta in listing.get("messages", []):
+        msg = service.users().messages().get(userId="me", id=meta["id"], format="metadata").execute()
+        headers = msg.get("payload", {}).get("headers", [])
+        subject = next((h.get("value", "") for h in headers if h.get("name", "").lower() == "subject"), "(no subject)")
+        sender = next((h.get("value", "") for h in headers if h.get("name", "").lower() == "from"), "unknown sender")
+        snippet = msg.get("snippet", "")
+        email = EmailMessage(
+            id=msg.get("id", str(uuid4())),
+            connection_id=connection_id,
+            from_name=sender,
+            from_email=sender,
+            subject=subject,
+            snippet=snippet,
+            is_unread="UNREAD" in msg.get("labelIds", []),
+            needs_reply=False,
+            labels=msg.get("labelIds", []),
+        )
+        imported.append(email)
+
+    existing_ids = {e.id for e in emails if e.connection_id == connection_id}
+    for message in imported:
+        if message.id not in existing_ids:
+            emails.append(message)
+
+    return imported
 
 
 class ChatRequest(BaseModel):
@@ -179,6 +253,8 @@ STATE: dict[str, object] = {
         "confidence_bias": 0.0,
     },
     "uploaded_assets": [],
+    "oauth_states": {},
+    "oauth_sessions": {},
 }
 AUTOPILOT_TASK: asyncio.Task | None = None
 
@@ -536,6 +612,48 @@ def connect_email(payload: EmailConnectionRequest) -> EmailConnection:
     return connection
 
 
+@app.get("/api/email/gmail/auth-url")
+def gmail_auth_url() -> dict[str, str]:
+    state = str(uuid4())
+    flow = build_gmail_oauth_flow(state=state)
+    auth_url, returned_state = flow.authorization_url(access_type="offline", include_granted_scopes="true", prompt="consent")
+    oauth_states = STATE["oauth_states"]
+    assert isinstance(oauth_states, dict)
+    oauth_states[returned_state] = {"created_at": utc_now().isoformat()}
+    return {"auth_url": auth_url}
+
+
+@app.get("/api/email/gmail/callback")
+def gmail_callback(code: str = Query(...), state: str = Query(...)) -> RedirectResponse:
+    oauth_states = STATE["oauth_states"]
+    oauth_sessions = STATE["oauth_sessions"]
+    email_connections = STATE["email_connections"]
+    assert isinstance(oauth_states, dict) and isinstance(oauth_sessions, dict) and isinstance(email_connections, list)
+    if state not in oauth_states:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state.")
+
+    flow = build_gmail_oauth_flow(state=state)
+    flow.fetch_token(code=code)
+    credentials = flow.credentials
+    gmail_service = build("gmail", "v1", credentials=credentials)
+    profile = gmail_service.users().getProfile(userId="me").execute()
+    account_email = profile.get("emailAddress", "")
+    if not account_email:
+        raise HTTPException(status_code=400, detail="Could not resolve Gmail account email.")
+
+    existing = next((conn for conn in email_connections if conn.provider == "gmail" and conn.account_email.lower() == account_email.lower()), None)
+    connection = existing or EmailConnection(id=f"conn_{uuid4().hex[:10]}", provider="gmail", account_email=account_email, connected_at=utc_now())
+    if existing:
+        existing.status = "connected"
+    else:
+        email_connections.append(connection)
+
+    oauth_sessions[connection.id] = {"credentials": credentials}
+    oauth_states.pop(state, None)
+    ingest_gmail_messages(connection.id, limit=10)
+    return RedirectResponse(url="/?gmail_connected=1")
+
+
 @app.post("/api/email/disconnect/{connection_id}")
 def disconnect_email(connection_id: str) -> dict:
     email_connections = STATE["email_connections"]
@@ -591,6 +709,12 @@ def list_email_messages(connection_id: str | None = None, unread_only: bool = Fa
         filtered = [email for email in filtered if email.is_unread]
     ordered = sorted(filtered, key=lambda m: m.received_at, reverse=True)
     return {"messages": ordered}
+
+
+@app.post("/api/email/gmail/sync/{connection_id}")
+def sync_gmail_messages(connection_id: str, limit: int = 10) -> dict:
+    messages = ingest_gmail_messages(connection_id=connection_id, limit=max(1, min(50, limit)))
+    return {"imported": len(messages)}
 
 
 async def autopilot_loop() -> None:

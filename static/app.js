@@ -97,6 +97,16 @@ document.getElementById("connect-email").addEventListener("click", async () => {
   await refresh();
 });
 
+document.getElementById("connect-gmail-oauth").addEventListener("click", async () => {
+  const response = await fetch("/api/email/gmail/auth-url");
+  const payload = await response.json();
+  if (!response.ok) {
+    alert(payload.detail || "Could not start Gmail OAuth.");
+    return;
+  }
+  window.location.href = payload.auth_url;
+});
+
 async function refresh() {
   const [status, brief, connectionData, inboxData] = await Promise.all([
     (await fetch("/api/autopilot/status")).json(),
@@ -118,6 +128,11 @@ async function refresh() {
       .map((c) => `${c.provider}: ${c.account_email}`),
     "No accounts connected"
   );
+
+  const gmailConnections = (connectionData.connections || []).filter((c) => c.provider === "gmail" && c.status === "connected");
+  for (const connection of gmailConnections) {
+    await fetch(`/api/email/gmail/sync/${connection.id}`, { method: "POST" });
+  }
   const summary = brief.inbox_summary || { unread: 0, needs_reply: 0 };
   const latestMessages = (inboxData.messages || []).slice(0, 3).map((m) => {
     const sender = m.from_name || m.from_email;
