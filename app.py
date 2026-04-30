@@ -133,12 +133,38 @@ class EmailConnection(BaseModel):
     status: Literal["connected", "disconnected"] = "connected"
 
 
+class EmailMessage(BaseModel):
+    id: str
+    connection_id: str
+    from_name: str
+    from_email: str
+    subject: str
+    snippet: str
+    received_at: datetime = Field(default_factory=utc_now)
+    is_unread: bool = True
+    needs_reply: bool = False
+    labels: list[str] = []
+
+
+class EmailIngestRequest(BaseModel):
+    connection_id: str
+    from_name: str = ""
+    from_email: str
+    subject: str
+    snippet: str
+    received_at: datetime | None = None
+    is_unread: bool = True
+    needs_reply: bool = False
+    labels: list[str] = []
+
+
 STATE: dict[str, object] = {
     "rules": ScheduleRule(),
     "items": [],
     "jobs": [],
     "threads": [],
     "email_connections": [],
+    "emails": [],
     "autopilot": {"enabled": False, "interval_seconds": 300, "last_run_at": None, "last_brief": None},
     "profile": UserProfile(),
     "resume": {"filename": None, "content": "", "uploaded_at": None},
@@ -179,7 +205,8 @@ def build_smart_context_summary() -> str:
     profile = STATE["profile"]
     resume = STATE["resume"]
     retail_tasks = STATE["retail_tasks"]
-    assert isinstance(items, list) and isinstance(jobs, list) and isinstance(threads, list) and isinstance(email_connections, list)
+    emails = STATE["emails"]
+    assert isinstance(items, list) and isinstance(jobs, list) and isinstance(threads, list) and isinstance(email_connections, list) and isinstance(emails, list)
     assert isinstance(learning, dict) and isinstance(profile, UserProfile) and isinstance(resume, dict) and isinstance(retail_tasks, list)
 
     connected_providers = sorted({c.provider for c in email_connections if c.status == "connected"})
@@ -211,8 +238,12 @@ def build_smart_context_summary() -> str:
     retail_name = profile.retail_business_name or "retail business"
     resume_ready = "available" if resume.get("content") else "not uploaded"
 
+    unread_count = len([m for m in emails if m.is_unread])
+    reply_count = len([m for m in emails if m.needs_reply])
+
     return (
         f"You are a proactive personal assistant. {inbox_note} "
+        f"Current inbox status -> unread emails: {unread_count}, emails needing a reply: {reply_count}. "
         f"Current counts -> open action items: {len(items)}, active job applications: {len(jobs)}, tracked threads: {len(threads)}. "
         f"Preferred user topics based on feedback: {preferred_topics}. Topics to avoid over-indexing: {avoid_topics}. "
         f"Active conversation topics: {active_topics}. Preferred response style: {preferred_style}. Confidence mode: {confidence_mode}. "
@@ -524,6 +555,44 @@ def list_email_connections() -> dict:
     return {"connections": email_connections}
 
 
+@app.post("/api/email/messages")
+def ingest_email_message(payload: EmailIngestRequest) -> EmailMessage:
+    email_connections = STATE["email_connections"]
+    emails = STATE["emails"]
+    assert isinstance(email_connections, list) and isinstance(emails, list)
+    connection = next((conn for conn in email_connections if conn.id == payload.connection_id and conn.status == "connected"), None)
+    if not connection:
+        raise HTTPException(status_code=404, detail="Connected email account not found for this connection_id.")
+
+    message = EmailMessage(
+        id=f"mail_{uuid4().hex[:12]}",
+        connection_id=payload.connection_id,
+        from_name=payload.from_name,
+        from_email=payload.from_email,
+        subject=payload.subject,
+        snippet=payload.snippet,
+        received_at=payload.received_at or utc_now(),
+        is_unread=payload.is_unread,
+        needs_reply=payload.needs_reply,
+        labels=payload.labels,
+    )
+    emails.append(message)
+    return message
+
+
+@app.get("/api/email/messages")
+def list_email_messages(connection_id: str | None = None, unread_only: bool = False) -> dict:
+    emails = STATE["emails"]
+    assert isinstance(emails, list)
+    filtered = emails
+    if connection_id:
+        filtered = [email for email in filtered if email.connection_id == connection_id]
+    if unread_only:
+        filtered = [email for email in filtered if email.is_unread]
+    ordered = sorted(filtered, key=lambda m: m.received_at, reverse=True)
+    return {"messages": ordered}
+
+
 async def autopilot_loop() -> None:
     while True:
         autopilot = STATE["autopilot"]
@@ -581,6 +650,7 @@ def assistant_health() -> dict:
             "adaptive_learning",
             "autopilot",
             "email_connectors",
+            "email_reading",
         ],
     }
 
@@ -624,10 +694,12 @@ def followups() -> dict:
 
 @app.get('/api/brief')
 def morning_brief() -> dict:
-    items = STATE['items']; threads = STATE['threads']; jobs = STATE['jobs']; email_connections = STATE['email_connections']
-    assert isinstance(items, list) and isinstance(threads, list) and isinstance(jobs, list) and isinstance(email_connections, list)
+    items = STATE['items']; threads = STATE['threads']; jobs = STATE['jobs']; email_connections = STATE['email_connections']; emails = STATE['emails']
+    assert isinstance(items, list) and isinstance(threads, list) and isinstance(jobs, list) and isinstance(email_connections, list) and isinstance(emails, list)
     connected_accounts = [c.account_email for c in email_connections if c.status == 'connected']
-    return {'generated_at': utc_now().isoformat(), 'top_3_outcomes': [i.what for i in prioritize_items(items, 'today')[:3]], 'focus_blocks': suggest_focus_blocks(), 'followups_due': [s for s in followups()['suggestions'] if s['action'] != 'watch'], 'job_actions': [j for j in jobs if j.follow_up_due and j.follow_up_due <= utc_now() + timedelta(days=2)], 'connected_email_accounts': connected_accounts}
+    unread_count = len([m for m in emails if m.is_unread])
+    needs_reply_count = len([m for m in emails if m.needs_reply])
+    return {'generated_at': utc_now().isoformat(), 'top_3_outcomes': [i.what for i in prioritize_items(items, 'today')[:3]], 'focus_blocks': suggest_focus_blocks(), 'followups_due': [s for s in followups()['suggestions'] if s['action'] != 'watch'], 'job_actions': [j for j in jobs if j.follow_up_due and j.follow_up_due <= utc_now() + timedelta(days=2)], 'connected_email_accounts': connected_accounts, 'inbox_summary': {'unread': unread_count, 'needs_reply': needs_reply_count}}
 
 
 def prioritize_items(items: list[ActionItem], bucket: Literal['today', 'week', 'backlog']) -> list[ActionItem]:

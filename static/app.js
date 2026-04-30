@@ -3,6 +3,7 @@ const intervalEl = document.getElementById("interval");
 const providerEl = document.getElementById("provider");
 const emailEl = document.getElementById("email");
 const connectionsEl = document.getElementById("connections");
+const inboxEl = document.getElementById("inbox");
 const chatInputEl = document.getElementById("chat-input");
 const chatFilesEl = document.getElementById("chat-files");
 const chatOutputEl = document.getElementById("chat-output");
@@ -97,10 +98,11 @@ document.getElementById("connect-email").addEventListener("click", async () => {
 });
 
 async function refresh() {
-  const [status, brief, connectionData] = await Promise.all([
+  const [status, brief, connectionData, inboxData] = await Promise.all([
     (await fetch("/api/autopilot/status")).json(),
     (await fetch("/api/brief")).json(),
     (await fetch("/api/email/connections")).json(),
+    (await fetch("/api/email/messages")).json(),
   ]);
 
   renderList(statusEl, [
@@ -115,6 +117,16 @@ async function refresh() {
       .filter((c) => c.status === "connected")
       .map((c) => `${c.provider}: ${c.account_email}`),
     "No accounts connected"
+  );
+  const summary = brief.inbox_summary || { unread: 0, needs_reply: 0 };
+  const latestMessages = (inboxData.messages || []).slice(0, 3).map((m) => {
+    const sender = m.from_name || m.from_email;
+    return `${sender}: ${m.subject}`;
+  });
+  renderList(
+    inboxEl,
+    [`Unread: ${summary.unread}`, `Needs reply: ${summary.needs_reply}`, ...latestMessages],
+    "No inbox messages yet"
   );
 
   renderList(briefOutcomesEl, brief.top_3_outcomes || [], "No priorities yet");
