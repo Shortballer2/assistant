@@ -4,6 +4,7 @@ const providerEl = document.getElementById("provider");
 const emailEl = document.getElementById("email");
 const connectionsEl = document.getElementById("connections");
 const chatInputEl = document.getElementById("chat-input");
+const chatFilesEl = document.getElementById("chat-files");
 const chatOutputEl = document.getElementById("chat-output");
 const chatStatusEl = document.getElementById("chat-status");
 const briefOutcomesEl = document.getElementById("brief-outcomes");
@@ -34,16 +35,28 @@ async function sendChat() {
   chatOutputEl.textContent = "";
 
   try {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
-    });
+    let response;
+    const files = Array.from(chatFilesEl.files || []);
+    if (files.length > 0) {
+      const formData = new FormData();
+      formData.append("message", message);
+      files.forEach((file) => formData.append("files", file));
+      response = await fetch("/api/chat/files", { method: "POST", body: formData });
+    } else {
+      response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+    }
 
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || "Assistant error");
 
     chatOutputEl.textContent = payload.reply || "No reply returned.";
+    if (files.length > 0) {
+      chatFilesEl.value = "";
+    }
     chatStatusEl.textContent = "";
   } catch (error) {
     chatOutputEl.textContent = `Sorry, I couldn't process that request. ${error.message}`;
