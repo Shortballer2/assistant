@@ -407,18 +407,19 @@ def list_retail_tasks() -> list[RetailTask]:
 
 @app.post("/api/chat")
 def chat(payload: ChatRequest) -> dict:
-    update_interaction_learning(payload.message)
-    client = require_client()
+    # Use your Cloudflare Tunnel URL as the base URL
+    client = OpenAI(
+        base_url="dawsonandmathis.com", 
+        api_key="ollama" # Ollama just needs a dummy string here
+    )
+    
     try:
-        response = client.responses.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
-            input=[
-                {"role": "system", "content": build_smart_context_summary()},
-                {"role": "user", "content": payload.message},
-            ],
+        response = client.chat.completions.create(
+            model="mistral", # Specify the model you downloaded in Step 1
+            messages=[{"role": "user", "content": payload.message}],
         )
-        text = response.output_text
-    except Exception as exc:  # noqa: BLE001
+        text = response.choices[0].message.content
+    except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Assistant error: {exc}") from exc
 
     return {"reply": text}
